@@ -166,57 +166,50 @@ def parity_oscillations_fidelity(n_qubits, total_shots, phi_values,
                                                           shots_parity, phi_values,
                                                           noise_model)
 
-    fit_amp, fit_phase, fit_amp_error = parity_oscillations_fit(parity_vals,
-                                                                parity_errors, phi_values)
+    popt, pcov = optimize.curve_fit(parametrized_cosine, phi_values, parity_vals, sigma=parity_errors)
 
+    alphas, alphas_variance = fidelity_population(n_qubits, shots_z, noise_model)
+
+    fidelity = 0.5 * (alphas + abs(popt[0]))
+    total_error = pcov[0] + (alphas_variance / shots_z)**0.5
+
+    print('beta', popt[0], 'alpha', alphas)
+    return fidelity, total_error
+
+
+def fidelity_population(n_qubits, n_shots, noise_model):
     simulator = Aer.get_backend('qasm_simulator')
-    q, c = QuantumRegister(n_qubits), ClassicalRegister(n_qubits)
-    circ = QuantumCircuit(q, c)
-    circ.h(q[0])
-    for i in range(n_qubits - 1):
-        circ.cx(q[i], q[i+1])
-    circ.measure(q, c)
+    circ = append_measurements_to_circ(get_ghz_circuit(n_qubits), 'z')
     result = execute(circ, simulator,
                      noise_model=noise_model,
-                     shots=shots_z).result()
+                     shots=n_shots).result()
     counts = result.get_counts(circ)
 
     # following the naming in Omran et al. (2019)
-    alphas = (counts['0' * n_qubits] + counts['1' * n_qubits]) / shots_z
-
+    alphas = (counts['0' * n_qubits] + counts['1' * n_qubits]) / n_shots
     alphas_variance = 1 - alphas**2
-
-    fidelity = 0.5 * (alphas + abs(fit_amp))
-    total_error = fit_amp_error + (alphas_variance / shots_z)**0.5
-
-    print('beta', fit_amp, 'alpha', alphas)
-    return fidelity, total_error
+    return alphas, alphas_variance
 
 
 def parity_oscillations_fit(parity_vals, parity_errors, phi_values):
 
-    def f(x, amp, phase):
-        return amp * np.sin(num_qubits * x + phase)
-
     def residual(p):
-        deltas = f(phi_values, p[0], p[1]) - parity_vals
+        deltas = parametrized_cosine(phi_values, p[0], p[1]) - parity_vals
         return deltas / (parity_errors + 1e-3)
 
     p0 = [1., 0.]
-    fit = optimize.least_squares(residual, p0)
+    popt, pcov = optimize.curve_fit(parametrized_cosine, phi_values, parity_vals,
+                                    p0=p0, sigma=parity_errors)
 
-    def total_residual_squared(x):
-        return np.sum(residual([x, fit.x[1]])**2)
+    hessian = np.zeros((2, 2))
+    hessian[1, 1] = 2 *1
 
-    def confidence_intersection(x):
-        return total_residual_squared(x) - total_residual_squared(fit.x[0]) - 1
-
-    sol_1 = optimize.diagbroyden(confidence_intersection, fit.x[0] - 0.1)
-    sol_2 = optimize.diagbroyden(confidence_intersection, fit.x[0] + 0.1)
-    error = max(abs(sol_1 - fit.x[0]), abs(sol_2 - fit.x[0]))
-    # might silently give an error if both converge to the same place!
-
+    error = 0
     return fit.x[0], fit.x[1], error
+
+
+def parametrized_cosine(x: np.array, amp: float, phase: float):
+    return 2 * amp * np.cos(num_qubits * x - phase)
 
 
 def parity_oscillations_data(n_qubits, total_shots, phi_values,
@@ -275,45 +268,19 @@ if __name__ == "__main__":
     my_noise_model.add_all_qubit_quantum_error(error, ['u1', 'u2', 'u3', 'h'])
     my_noise_model.add_all_qubit_quantum_error(error_cx, ['cx'])
 
-    phi_steps = 20
+    phi_steps = 40
     num_qubits = 5
     phi_values = np.linspace(0, 4 * 2 * np.pi / num_qubits, num=phi_steps)
+    phi_dense = np.linspace(0, 4 * 2 * np.pi / num_qubits, num=phi_steps * 100)
 
     n_tests = 5
-
-    def f(x, amp, phase):
-        return amp * np.sin(num_qubits * x + phase)
-
-    shot_budgets = np.linspace(20 * (phi_steps + 1), 100 * (phi_steps + 1), num=n_tests)
-    telescope_data = np.zeros((n_tests, 4))
-    parity_data = np.zeros((n_tests, 2))
-    for i, shots in enumerate(shot_budgets):
-        f_tele = telescope_fidelity(num_qubits, shots, noise_model=my_noise_model)
-        parity_vals, parity_errors = parity_oscillations_data(num_qubits,
-                                                              shots, phi_values,
-                                                              my_noise_model)
-        fit_amp, fit_phase, error = parity_oscillations_fit(parity_vals, parity_errors,
-                                                             phi_values)
-        f_parity = [fit_amp, error]
-        # f_parity = parity_oscillations_fidelity(n_qubits, shots, phi_values, noise_model)
-        telescope_data[i, :] = f_tele
-        parity_data[i, :] = f_parity
-
-    plt.rcParams.update({'font.size': 16})
-    plt.rcParams.update({'figure.figsize': [9, 6]})
-
-
-    plt.errorbar(shot_budgets, telescope_data[:, 0], yerr=2*telescope_data[:, 2], label='lower bound')
-    plt.errorbar(shot_budgets, telescope_data[:, 1], yerr=2*telescope_data[:, 3], label='upper bound')
-    plt.errorbar(shot_budgets, parity_data[:, 0], yerr=2*parity_data[:, 1], label='parity')
-    # plt.plot([min(shot_budgets), max(shot_budgets)], [fidelity_true, fidelity_true], '--', color='gray',
-    #          label='true fidelity')
-    plt.xlabel('Total shots')
-    plt.ylabel('Fidelity')
-    plt.grid()
-
-    plt.title('$n = {0:}, \phi \in [0, {1:2.1f} \pi]$, {2:} values of $\phi$; \n \
-                noise model: p1={3:2.3f}, p2={4:2.3f}'.format(
-                num_qubits, max(phi_values) / np.pi, phi_steps, p1, p2))
-    plt.legend()
+    total_shots = 10000
+    parity_vals, parity_errors = parity_oscillations_data(num_qubits, total_shots,
+                                                          phi_values, my_noise_model)
+    popt, pcov = optimize.curve_fit(parametrized_cosine, phi_values, parity_vals,
+                                    sigma=parity_errors)
+    y_data_fit = parametrized_cosine(phi_dense, *popt)
+    plt.errorbar(phi_values, parity_vals, yerr=parity_errors)
+    plt.plot(phi_dense, y_data_fit)
     plt.show()
+
