@@ -22,7 +22,8 @@ def true_fidelity(circ, noise_model):
     job = backend.run(circ)
     result = job.result()
     rho = result.results[0].data.density_matrix
-    rho_matrix = np.array(rho).reshape((2 ** num_qubits, 2 ** num_qubits))
+    rho_nq = len(rho.shape) // 2
+    rho_matrix = np.array(rho).reshape((2 ** rho_nq, 2 ** rho_nq))
 
     return (state_clean.conj() @ rho_matrix @ state_clean).real
 
@@ -161,10 +162,6 @@ def parity_oscillations_fidelity(n_qubits, total_shots, phi_values,
     shots_z = total_shots // (len(phi_values) + 1)
     shots_parity = total_shots - shots_z
 
-    parity_vals, parity_errors = parity_oscillations_data(n_qubits,
-                                                          shots_parity, phi_values,
-                                                          noise_model)
-
     coherence, coherence_error = parity_oscillations_coherence(n_qubits, shots_parity,
                                                                phi_values, noise_model)
     alphas, alphas_variance = fidelity_population(n_qubits, shots_z, noise_model)
@@ -246,40 +243,38 @@ def measure_parity(n_qubits, n_shots, phi, noise_model=None):
     pass
 
 
-if __name__ == "__main__":
+def parity_osc_coherence_errors(qubit_numbers: np.array, phi_point_numbers: np.array,
+                                total_shots_parity=1e5, noise_model=None):
+    error_values = np.zeros((len(qubit_numbers), len(phi_point_numbers)))
+    for i, n in enumerate(qubit_numbers):
+        for j, m in enumerate(phi_point_numbers):
+            phi_values = np.linspace(0, 2 * np.pi, num=m)
+            _, error_values[i, j] = parity_oscillations_coherence(n, total_shots_parity,
+                                                                  phi_values, noise_model)
+    return error_values
 
-    my_noise_model = NoiseModel()
+
+def depolarizing_noise_model(p1, p2):
+    noise_model = NoiseModel()
     # Add depolarizing error to all single qubit u1, u2, u3 gates
-    p1 = 0.1
-    p2 = 0.01
     error = depolarizing_error(p1, 1)
     error_cx = depolarizing_error(p2, 2)
-    # my_noise_model.add_all_qubit_quantum_error(error, ['u1', 'u2', 'u3', 'h'])
-    my_noise_model.add_all_qubit_quantum_error(error, ['h'])
-    my_noise_model.add_all_qubit_quantum_error(error_cx, ['cx'])
+    noise_model.add_all_qubit_quantum_error(error, ['u1', 'u2', 'u3', 'h'])
+    noise_model.add_all_qubit_quantum_error(error_cx, ['cx'])
+    return noise_model
 
-    phi_steps = 40
-    num_qubits = 5
-    phi_values = np.linspace(0, 4 * 2 * np.pi / num_qubits, num=phi_steps)
-    phi_dense = np.linspace(0, 4 * 2 * np.pi / num_qubits, num=phi_steps * 100)
 
-    total_shots = 1e4
-    par_osc_fid, error_osc = parity_oscillations_fidelity(
-        num_qubits, total_shots, phi_values, noise_model=my_noise_model
-    )
-    # qty_sigmas = 2
-    # print("Parity oscillations F in ({0:}, {1:})".format(par_osc_fid - error_osc * qty_sigmas,
-    #                                                      par_osc_fid + error_osc * qty_sigmas))
+if __name__ == "__main__":
+    p1 = 1e-3
+    p2 = 1e-2
+    shots_parity = 1e5
+    qubit_numbers = np.arange(2, 5)
+    phi_point_numbers = np.array([20, 30, 40, 50])
 
-    print('Stdev', error_osc)
+    my_noise_model = depolarizing_noise_model(p1, p2)
+    error_values = parity_osc_coherence_errors(qubit_numbers, phi_point_numbers,
+                                               shots_parity, my_noise_model)
 
-    true_fid = true_fidelity(get_ghz_circuit(num_qubits), my_noise_model)
-    print("true fidelity ",true_fid)
-    print("pop ", fidelity_population(num_qubits, 1000, my_noise_model))
+    print(error_values)
 
-    # n_tests = 5
-    # total_shots = 10000
-    # parity_vals, parity_errors = parity_oscillations_data(num_qubits, total_shots,
-    #                                                       phi_values, my_noise_model)
-    # popt, pcov = optimize.curve_fit(parametrized_cosine, phi_values, parity_vals,
-    #                                 sigma=parity_errors)
+
