@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from scipy import optimize
 from scipy.special import erfinv
 
-from qiskit import Aer, execute
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
 from qiskit.providers.aer.noise import NoiseModel
 from qiskit.providers.aer.noise import depolarizing_error
@@ -29,20 +28,16 @@ def true_fidelity(circ, noise_model):
 
 
 def telescope_fidelity(n_qubits, total_shots, ratio=0.5, noise_model=None):
-    simulator = AerSimulator()
+    backend = AerSimulator(noise_model=noise_model)
     circ_ghz = get_ghz_circuit(n_qubits)
 
     circ_ghz_measure_z = append_measurements_to_circ(circ_ghz, 'z')
     circ_ghz_measure_x = append_measurements_to_circ(circ_ghz, 'x')
 
-    result_z_noisy = execute(circ_ghz_measure_z, simulator,
-                             noise_model=noise_model,
-                             shots=total_shots * ratio).result()
+    result_z_noisy = backend.run(circ_ghz_measure_z, shots=total_shots * ratio).result()
     counts_z_noisy = result_z_noisy.get_counts(circ_ghz_measure_z)
 
-    result_x_noisy = execute(circ_ghz_measure_x, simulator,
-                             noise_model=noise_model,
-                             shots=total_shots * (1 - ratio)).result()
+    result_x_noisy = backend.run(circ_ghz_measure_x, shots=total_shots * (1-ratio)).result()
     counts_x_noisy = result_x_noisy.get_counts(circ_ghz_measure_x)
 
     energy_z, error_z = energy_and_error_z(counts_z_noisy)
@@ -170,21 +165,30 @@ def parity_oscillations_fidelity(n_qubits, total_shots, phi_values,
                                                           shots_parity, phi_values,
                                                           noise_model)
 
-    fit_function = make_parametrized_cosine(n_qubits)
-    popt, pcov = optimize.curve_fit(fit_function, phi_values, parity_vals, sigma=parity_errors)
+    coherence, coherence_error = parity_oscillations_coherence(n_qubits, shots_parity,
+                                                               phi_values, noise_model)
     alphas, alphas_variance = fidelity_population(n_qubits, shots_z, noise_model)
 
-    fidelity = 0.5 * (alphas + abs(popt[0]))
-    total_error = pcov[0, 0] + (alphas_variance / shots_z)**0.5
+    fidelity = 0.5 * (alphas + coherence)
+    total_error = coherence_error + (alphas_variance / shots_z)**0.5
 
     return fidelity, total_error
 
 
+def parity_oscillations_coherence(n_qubits, shots_parity, phi_values,
+    noise_model=None):
+    parity_vals, parity_errors = parity_oscillations_data(n_qubits,
+                                                          shots_parity, phi_values,
+                                                          noise_model)
+    fit_function = make_parametrized_cosine(n_qubits)
+    popt, pcov = optimize.curve_fit(fit_function, phi_values, parity_vals, sigma=parity_errors)
+    return abs(popt[0]), pcov[0, 0]
+
+
 def fidelity_population(n_qubits, n_shots, noise_model):
-    simulator = AerSimulator(noise_model=noise_model)
+    backend = AerSimulator(noise_model=noise_model)
     circ = append_measurements_to_circ(get_ghz_circuit(n_qubits), 'z')
-    result = execute(circ, simulator,
-                     shots=n_shots).result()
+    result = backend.run(circ, shots=n_shots, seed=100).result()
     counts = result.get_counts(circ)
 
     # following the naming in Omran et al. (2019)
@@ -203,7 +207,7 @@ def make_parametrized_cosine(num_qubits):
 
 def parity_oscillations_data(n_qubits, total_shots, phi_values,
                              noise_model=None):
-    simulator = AerSimulator(noise_model=noise_model)
+    backend = AerSimulator(noise_model=noise_model)
     q, c = QuantumRegister(n_qubits), ClassicalRegister(n_qubits)
     circ_ghz = QuantumCircuit(q, c)
     circ_ghz.h(q[0])
@@ -221,12 +225,7 @@ def parity_oscillations_data(n_qubits, total_shots, phi_values,
             circ.h(q[j])
         circ.measure(q, c)
         circ = circ_ghz.compose(circ)
-
-        # TODO: What is Qiskit's API regarding noise?
-        # The result seems to depend on where you supply the noise model
-        # Update to the current standard
-        result = execute(circ, simulator,
-                         shots=shots_per_point).result()
+        result = backend.run(circ, shots=shots_per_point).result()
 
         counts = result.get_counts(circ)
         parity_counts = np.zeros(2)
@@ -252,7 +251,7 @@ if __name__ == "__main__":
     my_noise_model = NoiseModel()
     # Add depolarizing error to all single qubit u1, u2, u3 gates
     p1 = 0.1
-    p2 = 0.
+    p2 = 0.01
     error = depolarizing_error(p1, 1)
     error_cx = depolarizing_error(p2, 2)
     # my_noise_model.add_all_qubit_quantum_error(error, ['u1', 'u2', 'u3', 'h'])
@@ -260,26 +259,23 @@ if __name__ == "__main__":
     my_noise_model.add_all_qubit_quantum_error(error_cx, ['cx'])
 
     phi_steps = 40
-    num_qubits = 2
+    num_qubits = 5
     phi_values = np.linspace(0, 4 * 2 * np.pi / num_qubits, num=phi_steps)
     phi_dense = np.linspace(0, 4 * 2 * np.pi / num_qubits, num=phi_steps * 100)
 
-    total_shots = 1e5
+    total_shots = 1e4
     par_osc_fid, error_osc = parity_oscillations_fidelity(
         num_qubits, total_shots, phi_values, noise_model=my_noise_model
     )
-    qty_sigmas = 2
-    print("Parity oscillations F in ({0:}, {1:})".format(par_osc_fid - error_osc * qty_sigmas,
-                                                         par_osc_fid + error_osc * qty_sigmas))
+    # qty_sigmas = 2
+    # print("Parity oscillations F in ({0:}, {1:})".format(par_osc_fid - error_osc * qty_sigmas,
+    #                                                      par_osc_fid + error_osc * qty_sigmas))
+
+    print('Stdev', error_osc)
 
     true_fid = true_fidelity(get_ghz_circuit(num_qubits), my_noise_model)
     print("true fidelity ",true_fid)
     print("pop ", fidelity_population(num_qubits, 1000, my_noise_model))
-    parity_vals, parity_errors = parity_oscillations_data(num_qubits, total_shots,
-                                                          phi_values, my_noise_model)
-    popt, pcov = optimize.curve_fit(make_parametrized_cosine(num_qubits), phi_values, parity_vals,
-                                    sigma=parity_errors)
-    print("amp", popt[0])
 
     # n_tests = 5
     # total_shots = 10000
@@ -287,9 +283,3 @@ if __name__ == "__main__":
     #                                                       phi_values, my_noise_model)
     # popt, pcov = optimize.curve_fit(parametrized_cosine, phi_values, parity_vals,
     #                                 sigma=parity_errors)
-    fit_fun = make_parametrized_cosine(num_qubits)
-    y_data_fit = fit_fun(phi_dense, *popt)
-    plt.errorbar(phi_values, parity_vals, yerr=parity_errors)
-    plt.plot(phi_dense, y_data_fit)
-    plt.grid()
-    plt.show()
