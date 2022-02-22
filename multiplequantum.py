@@ -18,7 +18,7 @@ def coherence(n_qubits, noise_model, shots_coherence):
     # in numpy and in the PRA paper
     coh_signal, coh_sigmas = coherence_signal(n_qubits, noise_model, shots_coherence)
     i_q = np.fft.ifft(coh_signal)
-    c = 2 * (i_q[n_qubits].real)**0.5
+    c = 2 * i_q[n_qubits].real**0.5
     sigma_c = 2 * np.mean(coh_sigmas)**0.5
     return c, sigma_c
 
