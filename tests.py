@@ -3,7 +3,7 @@ from qiskit.providers.aer.noise import NoiseModel
 from qiskit.providers.aer.noise import depolarizing_error
 import numpy as np
 
-from main import parity_oscillations_fidelity
+import parityoscillations
 
 
 class TestParityOscillations(unittest.TestCase):
@@ -18,7 +18,7 @@ class TestParityOscillations(unittest.TestCase):
         phi_steps = 40
         num_qubits = 5
         phi_values = np.linspace(0, 4 * 2 * np.pi / num_qubits, num=phi_steps)
-        par_osc_fid, error_osc = parity_oscillations_fidelity(
+        par_osc_fid, error_osc = parityoscillations.fidelity(
             num_qubits, total_shots=1e4, phi_values=phi_values, noise_model=my_noise_model
         )
         # Each Hadamard including the first one adds a multiplier of (1-p)
