@@ -8,6 +8,7 @@ from qiskit.providers.aer.noise import NoiseModel
 from qiskit.providers.aer.noise import depolarizing_error
 from qiskit.providers.aer import AerSimulator, StatevectorSimulator
 
+import multiplequantum
 
 def true_fidelity(circ, noise_model):
     backend = AerSimulator(noise_model=noise_model)
@@ -22,10 +23,11 @@ def true_fidelity(circ, noise_model):
     job = backend.run(circ)
     result = job.result()
     rho = result.results[0].data.density_matrix
-    rho_nq = len(rho.shape) // 2
-    rho_matrix = np.array(rho).reshape((2 ** rho_nq, 2 ** rho_nq))
+    # print(rho.shape)
+    # rho_nq = len(rho.shape) // 2
+    # rho_matrix = np.array(rho).reshape((2 ** rho_nq, 2 ** rho_nq))
 
-    return (state_clean.conj() @ rho_matrix @ state_clean).real
+    return (state_clean.conj() @ rho.data @ state_clean).real
 
 
 def telescope_fidelity(n_qubits, total_shots, ratio=0.5, noise_model=None):
@@ -229,8 +231,8 @@ def parity_oscillations_data(n_qubits, total_shots, phi_values,
         for k, v in counts.items():
             parity = k.count('1')
             parity_counts[parity % 2] += v
-        parity_counts = parity_counts / shots_per_point
-        total_parity = (-1) * parity_counts[0] + 1 * parity_counts[1]
+        parity_probabilities = parity_counts / shots_per_point
+        total_parity = (-1) * parity_probabilities[0] + 1 * parity_probabilities[1]
         parity_variance = 1 - total_parity**2
         parity_vals[i] = total_parity
         parity_errors[i] = (parity_variance / shots_per_point)**0.5
@@ -268,13 +270,27 @@ if __name__ == "__main__":
     p1 = 1e-3
     p2 = 1e-2
     shots_parity = 1e5
-    qubit_numbers = np.arange(2, 5)
-    phi_point_numbers = np.array([20, 30, 40, 50])
+    qubit_numbers = np.array([9])
+    phi_point_numbers = np.array([20] * 10)
 
     my_noise_model = depolarizing_noise_model(p1, p2)
-    error_values = parity_osc_coherence_errors(qubit_numbers, phi_point_numbers,
-                                               shots_parity, my_noise_model)
+    # error_values = parity_osc_coherence_errors(qubit_numbers, phi_point_numbers,
+    #                                            shots_parity, my_noise_model)
+    #
+    # print(error_values.T)
 
-    print(error_values)
+    num_qubits = 4
+    shots_coherence = 1e5
+    shots_pop = 1e5
 
+    signal, sigmas = multiplequantum.coherence_signal(num_qubits, my_noise_model, shots_coherence)
+    print(signal)
+    print(np.fft.ifft(signal))
 
+    mqc_fid, mqc_err = multiplequantum.fidelity(num_qubits, my_noise_model, shots_pop, shots_coherence)
+    f_true = true_fidelity(get_ghz_circuit(num_qubits), my_noise_model)
+    po_fid, po_err = parity_oscillations_fidelity(num_qubits, shots_coherence + shots_pop,
+                                                  np.linspace(0, 2 * np.pi, num=2 * num_qubits + 2), my_noise_model)
+    print("True ", f_true)
+    print("MQC ", mqc_fid, mqc_err)
+    print("PO ", po_fid, po_err)
