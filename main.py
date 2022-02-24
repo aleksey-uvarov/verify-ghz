@@ -1,16 +1,66 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Iterable
-from scipy import optimize
 
-from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
 from qiskit.providers.aer.noise import NoiseModel
-from qiskit.providers.aer.noise import depolarizing_error
 from qiskit.providers.aer import AerSimulator, StatevectorSimulator
 
 import multiplequantum
 import parityoscillations
 import telescope
+from shared import get_ghz_circuit, append_measurements_to_circ, depolarizing_noise_model
+
+
+def all_errors_experiment(shot_numbers, n_qubits, noise_model=None):
+    """Plot the errors of population, PO coherence, MQ coherence, and
+    Hamiltonian bounds as functions of the number of qubits"""
+    pop_vals = np.zeros_like(shot_numbers)
+    pop_errs = np.zeros_like(shot_numbers)
+    po_coh_vals = np.zeros_like(shot_numbers)
+    po_coh_errs = np.zeros_like(shot_numbers)
+    mq_coh_vals = np.zeros_like(shot_numbers)
+    mq_coh_errs = np.zeros_like(shot_numbers)
+    lower_vals = np.zeros_like(shot_numbers)
+    lower_errs = np.zeros_like(shot_numbers)
+    upper_vals = np.zeros_like(shot_numbers)
+    upper_errs = np.zeros_like(shot_numbers)
+
+    phi_values = np.linspace(0, 2 * np.pi, num=2 * n_qubits + 2, endpoint=False)
+
+    for i, shots in enumerate(shot_numbers):
+        pop_vals[i], pop_errs[i] = fidelity_population(n_qubits, shots, noise_model)
+        po_coh_vals[i], po_coh_errs[i] = parityoscillations.coherence_with_bootstrap(n_qubits,
+                                                                                     shots,
+                                                                                     phi_values,
+                                                                                     n_bootstraps=100,
+                                                                                     noise_model=noise_model)
+        # mq_coh_vals[i], mq_coh_errs[i] = multiplequantum.coherence(n_qubits, noise_model, shots)
+        lower_vals[i], upper_vals[i], lower_errs[i], upper_errs[i] = telescope.fidelity(n_qubits, shots,
+                                                                                        ratio=0.5,
+                                                                                        noise_model=noise_model)
+
+    # plt.figure()
+    # plt.errorbar(shot_numbers, pop_vals, yerr=pop_errs, label='Population')
+    # plt.errorbar(shot_numbers, po_coh_vals, yerr=po_coh_errs, label='Coherence PO')
+    # # plt.errorbar(shot_numbers, mq_coh_vals, yerr=mq_coh_errs, label='Coherence MQ')
+    # plt.errorbar(shot_numbers, lower_vals, yerr=lower_errs, label='Hamiltonian lower')
+    # plt.errorbar(shot_numbers, upper_vals, yerr=upper_errs, label='Hamiltonian upper')
+    # plt.xlabel('Shots')
+    # plt.ylabel('Fidelity')
+    # plt.legend()
+    # plt.show()
+
+    plt.figure()
+    plt.plot(shot_numbers, pop_errs, 'o-', label='pop')
+    plt.plot(shot_numbers, po_coh_errs, 'o-', label='po')
+    plt.plot(shot_numbers, lower_errs, 'o-', label='low')
+    plt.plot(shot_numbers, upper_errs, 'o-', label='high')
+    # plt.plot(shot_numbers, mq_coh_errs, 'o-', label='mqc')
+    plt.xlabel('Shots')
+    plt.ylabel('Error')
+    plt.legend()
+    plt.grid()
+    plt.show()
 
 
 def parity_osc_coherence_errors(qubit_numbers: np.array, phi_point_numbers: np.array,
@@ -68,27 +118,6 @@ def true_fidelity(circ, noise_model):
     return (state_clean.conj() @ rho.data @ state_clean).real
 
 
-def get_ghz_circuit(n_qubits):
-    q, c = QuantumRegister(n_qubits), ClassicalRegister(n_qubits)
-    circ_ghz = QuantumCircuit(q, c)
-    circ_ghz.h(q[0])
-    for i in range(n_qubits - 1):
-        circ_ghz.cx(q[i], q[i+1])
-    return circ_ghz
-
-
-def append_measurements_to_circ(circ, which):
-    if which not in ('z', 'x'):
-        raise ValueError("which must be 'z' or 'x'")
-    q, c = circ.qregs[0], circ.cregs[0]
-    circ_measure = circ.compose(QuantumCircuit(q, c))
-    if which == 'x':
-        for i in range(len(q)):
-            circ_measure.h(q[i])
-    circ_measure.measure(q, c)
-    return circ_measure
-
-
 def fidelity_population(n_qubits, n_shots, noise_model):
     backend = AerSimulator(noise_model=noise_model)
     circ = append_measurements_to_circ(get_ghz_circuit(n_qubits), 'z')
@@ -101,39 +130,23 @@ def fidelity_population(n_qubits, n_shots, noise_model):
     return alphas, (alphas_variance / n_shots)**0.5  # again maybe wilson?
 
 
-def make_parametrized_cosine(n_qubits):
-
-    def parametrized_cosine(x: np.array, amp: float, phase: float):
-        return amp * np.cos(n_qubits * x - phase)
-
-    return parametrized_cosine
-
-
-def depolarizing_noise_model(p_single, p_cx):
-    noise_model = NoiseModel()
-    # Add depolarizing error to all single qubit u1, u2, u3 gates
-    error = depolarizing_error(p_single, 1)
-    error_cx = depolarizing_error(p_cx, 2)
-    noise_model.add_all_qubit_quantum_error(error, ['u1', 'u2', 'u3', 'h'])
-    noise_model.add_all_qubit_quantum_error(error_cx, ['cx'])
-    return noise_model
-
-
 if __name__ == "__main__":
-    p1 = 1e-2
-    p2 = 1e-1
-    shots_parity = 1e5
+    p1 = 1e-3
+    p2 = 1e-2
     my_noise_model = depolarizing_noise_model(p1, p2)
 
-    shots_numbers = np.linspace(1000, 1e4, num=10)
-    shots_dense = np.linspace(min(shots_numbers), max(shots_numbers), num=100)
-    num_qubits = 12
-    population_sigmas = population_error_experiment(num_qubits, shots_numbers,
-                                                    noise_model=my_noise_model)
-    print(population_sigmas)
-    popt, pcov = optimize.curve_fit(lambda x, a: a * x**(-0.5), shots_numbers, population_sigmas)
-    plt.loglog(shots_numbers, population_sigmas, 'o')
-    plt.loglog(shots_dense, popt[0] * shots_dense**(-0.5))
-    print(popt)
-    plt.grid()
-    plt.show()
+    all_errors_experiment(n_qubits=6,
+                          noise_model=my_noise_model,
+                          shot_numbers=np.linspace(1e4, 1e5, num=11))
+    # shots_numbers = np.linspace(1000, 1e4, num=10)
+    # shots_dense = np.linspace(min(shots_numbers), max(shots_numbers), num=100)
+    # num_qubits = 12
+    # population_sigmas = population_error_experiment(num_qubits, shots_numbers,
+    #                                                 noise_model=my_noise_model)
+    # print(population_sigmas)
+    # popt, pcov = optimize.curve_fit(lambda x, a: a * x**(-0.5), shots_numbers, population_sigmas)
+    # plt.loglog(shots_numbers, population_sigmas, 'o')
+    # plt.loglog(shots_dense, popt[0] * shots_dense**(-0.5))
+    # print(popt)
+    # plt.grid()
+    # plt.show()

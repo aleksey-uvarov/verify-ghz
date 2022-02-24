@@ -4,10 +4,10 @@ from qiskit.providers.aer import AerSimulator
 import numpy as np
 
 import main
+import shared
 
 
 def fidelity(n_qubits, total_shots, phi_values, noise_model=None):
-
     shots_z = total_shots // (len(phi_values) + 1)
     shots_parity = total_shots - shots_z
 
@@ -26,13 +26,43 @@ def coherence(n_qubits, shots_parity, phi_values,
     parity_vals, parity_errors = parity_oscillations_data(n_qubits,
                                                           shots_parity, phi_values,
                                                           noise_model)
-    fit_function = main.make_parametrized_cosine(n_qubits)
+    fit_function = shared.make_parametrized_cosine(n_qubits)
     popt, pcov = optimize.curve_fit(fit_function, phi_values, parity_vals, sigma=parity_errors)
     return abs(popt[0]), pcov[0, 0]
 
 
+def coherence_with_bootstrap(n_qubits, shots_parity, phi_values,
+                             n_bootstraps, noise_model=None):
+    parity_vals, _ = parity_oscillations_data(n_qubits,
+                                              shots_parity, phi_values,
+                                              noise_model)
+    fit_function = shared.make_parametrized_cosine(n_qubits)
+    popt, _ = optimize.curve_fit(fit_function, phi_values, parity_vals)
+    coh_data_estimate = abs(popt[0])
+    coh_bootstrap_estimates = np.zeros(n_bootstraps)
+    for i in range(n_bootstraps):
+        freqs = sample_binomials((parity_vals + 1) / 2, shots_parity)
+        popt, _ = optimize.curve_fit(fit_function, phi_values, 2 * freqs - 1)
+        coh_bootstrap_estimates[i] = popt[0]
+    bootstrap_variance = np.var(coh_bootstrap_estimates)
+    return coh_data_estimate, (bootstrap_variance / n_bootstraps)**0.5
+    #todo: how many bootstraps do you need?
+
+
+def sample_binomials(probabilities: np.array, total_shots):
+    """Take the binomial success rates and produce
+    total_shots samples, then return resampled probabilities."""
+    shots_per_point = total_shots / probabilities.shape[0]
+    resampled_frequencies = np.zeros_like(probabilities)
+    for i, p in enumerate(probabilities):
+        resampled_frequencies[i] = np.random.binomial(shots_per_point, p) / shots_per_point
+    return resampled_frequencies
+
+
 def parity_oscillations_data(n_qubits, total_shots, phi_values,
                              noise_model=None):
+    """Measure the parity in points specified by phi_values,
+    using a budget of total_shots for all of them."""
     backend = AerSimulator(noise_model=noise_model)
     q, c = QuantumRegister(n_qubits), ClassicalRegister(n_qubits)
     circ_ghz = QuantumCircuit(q, c)
@@ -64,5 +94,7 @@ def parity_oscillations_data(n_qubits, total_shots, phi_values,
         parity_vals[i] = total_parity
         parity_errors[i] = (parity_variance / shots_per_point)**0.5
     return parity_vals, parity_errors
-    # todo: should return parity_vals, parity_ci
-    # the latter to be calculated by Wilson or similar
+
+
+
+

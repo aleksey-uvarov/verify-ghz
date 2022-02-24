@@ -2,6 +2,7 @@ from qiskit.providers.aer import AerSimulator
 import numpy as np
 
 import main
+import shared
 
 
 def fidelity(n_qubits, noise_model, shots_population, shots_coherence):
@@ -41,7 +42,7 @@ def coherence_signal(n_qubits, noise_model, shots_coherence):
 
 
 def mqc_ghz_circuit(n_qubits, phi, hahn_flip=False):
-    circ = main.get_ghz_circuit(n_qubits)
+    circ = shared.get_ghz_circuit(n_qubits)
     q = circ.qregs[0]
     for i in range(n_qubits):
         if hahn_flip:

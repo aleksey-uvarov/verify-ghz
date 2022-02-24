@@ -3,13 +3,15 @@ import numpy as np
 import main
 from scipy.special import erfinv
 
+import shared
+
 
 def fidelity(n_qubits, total_shots, ratio=0.5, noise_model=None):
     backend = AerSimulator(noise_model=noise_model)
-    circ_ghz = main.get_ghz_circuit(n_qubits)
+    circ_ghz = shared.get_ghz_circuit(n_qubits)
 
-    circ_ghz_measure_z = main.append_measurements_to_circ(circ_ghz, 'z')
-    circ_ghz_measure_x = main.append_measurements_to_circ(circ_ghz, 'x')
+    circ_ghz_measure_z = shared.append_measurements_to_circ(circ_ghz, 'z')
+    circ_ghz_measure_x = shared.append_measurements_to_circ(circ_ghz, 'x')
 
     result_z_noisy = backend.run(circ_ghz_measure_z, shots=total_shots * ratio).result()
     counts_z_noisy = result_z_noisy.get_counts(circ_ghz_measure_z)
