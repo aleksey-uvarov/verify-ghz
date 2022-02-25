@@ -24,7 +24,22 @@ def coherence(n_qubits, noise_model, shots_coherence):
     return c, sigma_c
 
 
+def coherence_with_bootstrap(n_qubits, noise_model, shots, n_bootstraps=100):
+    coh_signal, _ = coherence_signal(n_qubits, noise_model, shots)
+    i_q = np.fft.ifft(coh_signal)
+    c = 2 * i_q[n_qubits].real**0.5
+    bootstrap_estimates = np.zeros(n_bootstraps)
+    for i in range(n_bootstraps):
+        bootstrap_signal = shared.sample_binomials(coh_signal, shots)
+        i_q = np.fft.ifft(bootstrap_signal)
+        bootstrap_estimates[i] = 2 * i_q[n_qubits].real**0.5
+    bootstrap_variance = np.var(bootstrap_estimates)
+    return c, (bootstrap_variance / n_bootstraps)**0.5
+
+
 def coherence_signal(n_qubits, noise_model, shots_coherence):
+    """Calculate the probabilities to measure '0' on the first qubit
+    in the MQC experiment for relevant values of phi"""
     backend = AerSimulator(noise_model=noise_model)
     phi_values = np.linspace(0, 2 * np.pi, num=(2 * n_qubits + 2), endpoint=False)
     shots_per_experiment = shots_coherence / (2*n_qubits+2)

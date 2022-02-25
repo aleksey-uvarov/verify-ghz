@@ -11,8 +11,8 @@ def fidelity(n_qubits, total_shots, phi_values, noise_model=None):
     shots_z = total_shots // (len(phi_values) + 1)
     shots_parity = total_shots - shots_z
 
-    coh, coh_error = coherence(n_qubits, shots_parity,
-                               phi_values, noise_model)
+    coh, coh_error = coherence_with_bootstrap(n_qubits, shots_parity,
+                                              phi_values, noise_model)
     alphas, alphas_variance = main.fidelity_population(n_qubits, shots_z, noise_model)
 
     fid = 0.5 * (alphas + coh)
@@ -32,7 +32,7 @@ def coherence(n_qubits, shots_parity, phi_values,
 
 
 def coherence_with_bootstrap(n_qubits, shots_parity, phi_values,
-                             n_bootstraps, noise_model=None):
+                             n_bootstraps=100, noise_model=None):
     parity_vals, _ = parity_oscillations_data(n_qubits,
                                               shots_parity, phi_values,
                                               noise_model)
@@ -41,22 +41,13 @@ def coherence_with_bootstrap(n_qubits, shots_parity, phi_values,
     coh_data_estimate = abs(popt[0])
     coh_bootstrap_estimates = np.zeros(n_bootstraps)
     for i in range(n_bootstraps):
-        freqs = sample_binomials((parity_vals + 1) / 2, shots_parity)
+        freqs = shared.sample_binomials((parity_vals + 1) / 2, shots_parity)
         popt, _ = optimize.curve_fit(fit_function, phi_values, 2 * freqs - 1)
         coh_bootstrap_estimates[i] = popt[0]
     bootstrap_variance = np.var(coh_bootstrap_estimates)
     return coh_data_estimate, (bootstrap_variance / n_bootstraps)**0.5
-    #todo: how many bootstraps do you need?
-
-
-def sample_binomials(probabilities: np.array, total_shots):
-    """Take the binomial success rates and produce
-    total_shots samples, then return resampled probabilities."""
-    shots_per_point = total_shots / probabilities.shape[0]
-    resampled_frequencies = np.zeros_like(probabilities)
-    for i, p in enumerate(probabilities):
-        resampled_frequencies[i] = np.random.binomial(shots_per_point, p) / shots_per_point
-    return resampled_frequencies
+    # Efron and Tibshirani give a 'rule of thumb' that 100 bootstrap replications
+    # give satisfactory results. Also, here the distributions are thin-tailed or even finite
 
 
 def parity_oscillations_data(n_qubits, total_shots, phi_values,

@@ -7,6 +7,7 @@ from qiskit.providers.aer import AerSimulator, StatevectorSimulator
 
 import multiplequantum
 import parityoscillations
+import shared
 import telescope
 from shared import get_ghz_circuit, append_measurements_to_circ, depolarizing_noise_model
 
@@ -32,34 +33,81 @@ def all_errors_experiment(shot_numbers, n_qubits, noise_model=None):
         po_coh_vals[i], po_coh_errs[i] = parityoscillations.coherence_with_bootstrap(n_qubits,
                                                                                      shots,
                                                                                      phi_values,
-                                                                                     n_bootstraps=100,
-                                                                                     noise_model=noise_model)
-        # mq_coh_vals[i], mq_coh_errs[i] = multiplequantum.coherence(n_qubits, noise_model, shots)
+                                                                                     noise_model=noise_model,
+                                                                                     n_bootstraps=100)
+        mq_coh_vals[i], mq_coh_errs[i] = multiplequantum.coherence_with_bootstrap(n_qubits, noise_model, shots)
         lower_vals[i], upper_vals[i], lower_errs[i], upper_errs[i] = telescope.fidelity(n_qubits, shots,
                                                                                         ratio=0.5,
                                                                                         noise_model=noise_model)
 
-    # plt.figure()
-    # plt.errorbar(shot_numbers, pop_vals, yerr=pop_errs, label='Population')
-    # plt.errorbar(shot_numbers, po_coh_vals, yerr=po_coh_errs, label='Coherence PO')
-    # # plt.errorbar(shot_numbers, mq_coh_vals, yerr=mq_coh_errs, label='Coherence MQ')
-    # plt.errorbar(shot_numbers, lower_vals, yerr=lower_errs, label='Hamiltonian lower')
-    # plt.errorbar(shot_numbers, upper_vals, yerr=upper_errs, label='Hamiltonian upper')
-    # plt.xlabel('Shots')
-    # plt.ylabel('Fidelity')
-    # plt.legend()
-    # plt.show()
+    f_true = true_fidelity(shared.get_ghz_circuit(n_qubits), noise_model)
+
+    labels = ['$2^{{{0:}}}$'.format(int(np.log2(s))) for s in shot_numbers]
+    markersize = 8
 
     plt.figure()
-    plt.plot(shot_numbers, pop_errs, 'o-', label='pop')
-    plt.plot(shot_numbers, po_coh_errs, 'o-', label='po')
-    plt.plot(shot_numbers, lower_errs, 'o-', label='low')
-    plt.plot(shot_numbers, upper_errs, 'o-', label='high')
-    # plt.plot(shot_numbers, mq_coh_errs, 'o-', label='mqc')
+    plt.errorbar(shot_numbers, pop_vals, yerr=pop_errs, label='Population',
+                 marker='s', ms=markersize, color='tab:purple')
+    plt.errorbar(shot_numbers, po_coh_vals, yerr=po_coh_errs, label='Coherence PO',
+                 marker='o', ls='--', ms=markersize, color='tab:orange')
+    plt.errorbar(shot_numbers, mq_coh_vals, yerr=mq_coh_errs, label='Coherence MQ',
+                 marker='h', ls='--', ms=markersize, color='tab:blue')
+    plt.errorbar(shot_numbers, lower_vals, yerr=lower_errs, label='H lower',
+                 marker='^', ls='-', ms=markersize, color='tab:green')
+    plt.errorbar(shot_numbers, upper_vals, yerr=upper_errs, label='H upper',
+                 marker='v', ls='-', ms=markersize, color='tab:red')
+    plt.xlabel('Shots')
+    plt.ylabel('Fidelity')
+    ax = plt.axes()
+    ax.set_xscale("log")
+    plt.xticks(shot_numbers, labels=labels)
+    # plt.legend()
+    plt.savefig('fidelity_terms_{0:}_qubits.eps'.format(n_qubits), format='eps', bbox_inches='tight')
+
+
+# This plot makes no sense unless you fix the shot numbers somehow.
+    # Effectively for fidelities we use up a double number of shots.
+    plt.figure()
+    plt.errorbar(shot_numbers, (po_coh_vals + pop_vals)/2,
+                 yerr=(po_coh_errs + pop_errs)/2, label='PO',
+                 marker='o', ls='--', ms=markersize, color='tab:orange')
+    plt.errorbar(shot_numbers, (mq_coh_vals + pop_vals)/2,
+                 yerr=(mq_coh_errs + pop_errs)/2, label='MQC',
+                 marker='h', ls='--', ms=markersize, color='tab:blue')
+    plt.errorbar(shot_numbers, lower_vals,
+                 yerr=lower_errs, label='H lower',
+                 marker='^', ls='-', ms=markersize, color='tab:green')
+    plt.errorbar(shot_numbers, upper_vals,
+                 yerr=upper_errs, label='H upper',
+                 marker='v', ls='-', ms=markersize, color='tab:red')
+    plt.xlabel('Shots')
+    plt.ylabel('Fidelity')
+    ax = plt.axes()
+    ax.set_xscale("log")
+    plt.xticks(shot_numbers, labels=labels)
+    # I draw a line that crosses all the viewport.
+    # To do that, I record current lims, plot, then go back to the lims
+    # (otherwise pyplot would change the viewport to accomodate)
+    xlim = plt.xlim()
+    ylim = plt.ylim()
+    plt.plot([0, 10 * max(shot_numbers)], [f_true, f_true], '-.', color='black')
+    plt.xlim(xlim)
+    plt.ylim(ylim)
+    # plt.legend()
+    plt.savefig('fidelity_{0:}_qubits.eps'.format(n_qubits), format='eps', bbox_inches='tight')
+
+    plt.figure()
+    plt.loglog(shot_numbers, pop_errs, 's--', label='pop', ms=markersize, color='tab:purple')
+    plt.loglog(shot_numbers, po_coh_errs, 'o--', label='po', ms=markersize, color='tab:orange')
+    plt.loglog(shot_numbers, lower_errs, '^-', label='low', ms=markersize, color='tab:green')
+    plt.loglog(shot_numbers, upper_errs, 'v-', label='high', ms=markersize, color='tab:red')
+    plt.loglog(shot_numbers, mq_coh_errs, 'h--', label='mqc', ms=markersize, color='tab:blue')
     plt.xlabel('Shots')
     plt.ylabel('Error')
-    plt.legend()
+    plt.xticks(shot_numbers, labels=labels)
+    # plt.legend()
     plt.grid()
+    plt.savefig('errors_{0:}_qubits.eps'.format(n_qubits), format='eps', bbox_inches='tight')
     plt.show()
 
 
@@ -131,13 +179,14 @@ def fidelity_population(n_qubits, n_shots, noise_model):
 
 
 if __name__ == "__main__":
+    plt.rcParams.update({'figure.figsize': (9, 6), 'font.size': 18})
     p1 = 1e-3
     p2 = 1e-2
     my_noise_model = depolarizing_noise_model(p1, p2)
 
-    all_errors_experiment(n_qubits=6,
+    all_errors_experiment(n_qubits=8,
                           noise_model=my_noise_model,
-                          shot_numbers=np.linspace(1e4, 1e5, num=11))
+                          shot_numbers=np.logspace(10, 15, num=6, base=2))
     # shots_numbers = np.linspace(1000, 1e4, num=10)
     # shots_dense = np.linspace(min(shots_numbers), max(shots_numbers), num=100)
     # num_qubits = 12

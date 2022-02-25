@@ -3,6 +3,16 @@ from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
 from qiskit.providers.aer.noise import NoiseModel, depolarizing_error
 
 
+def sample_binomials(probabilities: np.array, total_shots):
+    """Take the binomial success rates and produce
+    total_shots samples, then return resampled probabilities."""
+    shots_per_point = total_shots / probabilities.shape[0]
+    resampled_frequencies = np.zeros_like(probabilities)
+    for i, p in enumerate(probabilities):
+        resampled_frequencies[i] = np.random.binomial(shots_per_point, p) / shots_per_point
+    return resampled_frequencies
+
+
 def get_ghz_circuit(n_qubits):
     q, c = QuantumRegister(n_qubits), ClassicalRegister(n_qubits)
     circ_ghz = QuantumCircuit(q, c)
