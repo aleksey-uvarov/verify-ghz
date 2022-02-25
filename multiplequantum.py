@@ -34,7 +34,7 @@ def coherence_with_bootstrap(n_qubits, noise_model, shots, n_bootstraps=100):
         i_q = np.fft.ifft(bootstrap_signal)
         bootstrap_estimates[i] = 2 * i_q[n_qubits].real**0.5
     bootstrap_variance = np.var(bootstrap_estimates)
-    return c, (bootstrap_variance / n_bootstraps)**0.5
+    return c, (bootstrap_variance)**0.5
 
 
 def coherence_signal(n_qubits, noise_model, shots_coherence):

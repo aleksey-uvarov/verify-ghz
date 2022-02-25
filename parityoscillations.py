@@ -45,7 +45,7 @@ def coherence_with_bootstrap(n_qubits, shots_parity, phi_values,
         popt, _ = optimize.curve_fit(fit_function, phi_values, 2 * freqs - 1)
         coh_bootstrap_estimates[i] = popt[0]
     bootstrap_variance = np.var(coh_bootstrap_estimates)
-    return coh_data_estimate, (bootstrap_variance / n_bootstraps)**0.5
+    return coh_data_estimate, bootstrap_variance**0.5
     # Efron and Tibshirani give a 'rule of thumb' that 100 bootstrap replications
     # give satisfactory results. Also, here the distributions are thin-tailed or even finite
 

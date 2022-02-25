@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Iterable
+import time
 
 from qiskit.providers.aer.noise import NoiseModel
 from qiskit.providers.aer import AerSimulator, StatevectorSimulator
@@ -44,6 +45,7 @@ def all_errors_experiment(shot_numbers, n_qubits, noise_model=None):
 
     labels = ['$2^{{{0:}}}$'.format(int(np.log2(s))) for s in shot_numbers]
     markersize = 8
+    t = time.time()
 
     plt.figure()
     plt.errorbar(shot_numbers, pop_vals, yerr=pop_errs, label='Population',
@@ -62,39 +64,39 @@ def all_errors_experiment(shot_numbers, n_qubits, noise_model=None):
     ax.set_xscale("log")
     plt.xticks(shot_numbers, labels=labels)
     # plt.legend()
-    plt.savefig('fidelity_terms_{0:}_qubits.eps'.format(n_qubits), format='eps', bbox_inches='tight')
+    plt.savefig('fidelity_terms_{0:}_qubits_{1:}.eps'.format(n_qubits, t), format='eps', bbox_inches='tight')
 
 
 # This plot makes no sense unless you fix the shot numbers somehow.
     # Effectively for fidelities we use up a double number of shots.
-    plt.figure()
-    plt.errorbar(shot_numbers, (po_coh_vals + pop_vals)/2,
-                 yerr=(po_coh_errs + pop_errs)/2, label='PO',
-                 marker='o', ls='--', ms=markersize, color='tab:orange')
-    plt.errorbar(shot_numbers, (mq_coh_vals + pop_vals)/2,
-                 yerr=(mq_coh_errs + pop_errs)/2, label='MQC',
-                 marker='h', ls='--', ms=markersize, color='tab:blue')
-    plt.errorbar(shot_numbers, lower_vals,
-                 yerr=lower_errs, label='H lower',
-                 marker='^', ls='-', ms=markersize, color='tab:green')
-    plt.errorbar(shot_numbers, upper_vals,
-                 yerr=upper_errs, label='H upper',
-                 marker='v', ls='-', ms=markersize, color='tab:red')
-    plt.xlabel('Shots')
-    plt.ylabel('Fidelity')
-    ax = plt.axes()
-    ax.set_xscale("log")
-    plt.xticks(shot_numbers, labels=labels)
-    # I draw a line that crosses all the viewport.
-    # To do that, I record current lims, plot, then go back to the lims
-    # (otherwise pyplot would change the viewport to accomodate)
-    xlim = plt.xlim()
-    ylim = plt.ylim()
-    plt.plot([0, 10 * max(shot_numbers)], [f_true, f_true], '-.', color='black')
-    plt.xlim(xlim)
-    plt.ylim(ylim)
-    # plt.legend()
-    plt.savefig('fidelity_{0:}_qubits.eps'.format(n_qubits), format='eps', bbox_inches='tight')
+    # plt.figure()
+    # plt.errorbar(shot_numbers, (po_coh_vals + pop_vals)/2,
+    #              yerr=(po_coh_errs + pop_errs)/2, label='PO',
+    #              marker='o', ls='--', ms=markersize, color='tab:orange')
+    # plt.errorbar(shot_numbers, (mq_coh_vals + pop_vals)/2,
+    #              yerr=(mq_coh_errs + pop_errs)/2, label='MQC',
+    #              marker='h', ls='--', ms=markersize, color='tab:blue')
+    # plt.errorbar(shot_numbers, lower_vals,
+    #              yerr=lower_errs, label='H lower',
+    #              marker='^', ls='-', ms=markersize, color='tab:green')
+    # plt.errorbar(shot_numbers, upper_vals,
+    #              yerr=upper_errs, label='H upper',
+    #              marker='v', ls='-', ms=markersize, color='tab:red')
+    # plt.xlabel('Shots')
+    # plt.ylabel('Fidelity')
+    # ax = plt.axes()
+    # ax.set_xscale("log")
+    # plt.xticks(shot_numbers, labels=labels)
+    # # I draw a line that crosses all the viewport.
+    # # To do that, I record current lims, plot, then go back to the lims
+    # # (otherwise pyplot would change the viewport to accomodate)
+    # xlim = plt.xlim()
+    # ylim = plt.ylim()
+    # plt.plot([0, 10 * max(shot_numbers)], [f_true, f_true], '-.', color='black')
+    # plt.xlim(xlim)
+    # plt.ylim(ylim)
+    # # plt.legend()
+    # plt.savefig('fidelity_{0:}_qubits.eps'.format(n_qubits), format='eps', bbox_inches='tight')
 
     plt.figure()
     plt.loglog(shot_numbers, pop_errs, 's--', label='pop', ms=markersize, color='tab:purple')
@@ -107,7 +109,7 @@ def all_errors_experiment(shot_numbers, n_qubits, noise_model=None):
     plt.xticks(shot_numbers, labels=labels)
     # plt.legend()
     plt.grid()
-    plt.savefig('errors_{0:}_qubits.eps'.format(n_qubits), format='eps', bbox_inches='tight')
+    plt.savefig('errors_{0:}_qubits_{1:}.eps'.format(n_qubits, t), format='eps', bbox_inches='tight')
     plt.show()
 
 
@@ -184,7 +186,7 @@ if __name__ == "__main__":
     p2 = 1e-2
     my_noise_model = depolarizing_noise_model(p1, p2)
 
-    all_errors_experiment(n_qubits=8,
+    all_errors_experiment(n_qubits=10,
                           noise_model=my_noise_model,
                           shot_numbers=np.logspace(10, 15, num=6, base=2))
     # shots_numbers = np.linspace(1000, 1e4, num=10)
