@@ -11,6 +11,44 @@ import parityoscillations
 import shared
 import telescope
 from shared import get_ghz_circuit, append_measurements_to_circ, depolarizing_noise_model
+from shared import only_h_noise_model
+
+
+def error_as_nq_experiment(qubit_numbers, n_shots=2**15, noise_model=None):
+    po_coh_errors = np.zeros(len(qubit_numbers))
+    mqc_coh_errors = np.zeros(len(qubit_numbers))
+    pop_errors = np.zeros(len(qubit_numbers))
+    lower_errors = np.zeros(len(qubit_numbers))
+    upper_errors = np.zeros(len(qubit_numbers))
+
+    t0 = time.time()
+    for i, n in enumerate(qubit_numbers):
+        print(int(time.time() - t0))
+        print(n, " qubits...")
+        phi_values = np.linspace(0, 2 * np.pi, num=2 * n + 2, endpoint=False)
+        _, po_coh_errors[i] = parityoscillations.coherence_with_bootstrap(n, n_shots,
+                                                                          phi_values, noise_model=noise_model)
+        _, mqc_coh_errors[i] = multiplequantum.coherence_with_bootstrap(n_qubits=n, noise_model=noise_model,
+                                                                        shots=n_shots)
+        _, pop_errors[i] = fidelity_population(n, n_shots, noise_model)
+        _, __, lower_errors[i], upper_errors[i] = telescope.fidelity(n, n_shots, noise_model=noise_model)
+
+    markersize = 8
+    t = int(time.time())
+
+    plt.figure()
+    plt.plot(qubit_numbers, pop_errors, 's--', label='pop', ms=markersize, color='tab:purple')
+    plt.plot(qubit_numbers, po_coh_errors, 'o--', label='po', ms=markersize, color='tab:orange')
+    plt.plot(qubit_numbers, lower_errors, '^-', label='low', ms=markersize, color='tab:green')
+    plt.plot(qubit_numbers, upper_errors, 'v-', label='high', ms=markersize, color='tab:red')
+    plt.plot(qubit_numbers, mqc_coh_errors, 'h--', label='mqc', ms=markersize, color='tab:blue')
+    plt.xlabel('Qubits')
+    plt.ylabel('Error')
+    plt.xticks(qubit_numbers, labels=[str(n) for n in qubit_numbers])
+    # plt.legend()
+    plt.grid()
+    plt.savefig('errors_as_nq_{0:}.eps'.format(t), format='eps', bbox_inches='tight')
+    plt.show()
 
 
 def all_errors_experiment(shot_numbers, n_qubits, noise_model=None):
@@ -28,7 +66,6 @@ def all_errors_experiment(shot_numbers, n_qubits, noise_model=None):
     upper_errs = np.zeros_like(shot_numbers)
 
     phi_values = np.linspace(0, 2 * np.pi, num=2 * n_qubits + 2, endpoint=False)
-
     for i, shots in enumerate(shot_numbers):
         pop_vals[i], pop_errs[i] = fidelity_population(n_qubits, shots, noise_model)
         po_coh_vals[i], po_coh_errs[i] = parityoscillations.coherence_with_bootstrap(n_qubits,
@@ -45,7 +82,7 @@ def all_errors_experiment(shot_numbers, n_qubits, noise_model=None):
 
     labels = ['$2^{{{0:}}}$'.format(int(np.log2(s))) for s in shot_numbers]
     markersize = 8
-    t = time.time()
+    t = int(time.time())
 
     plt.figure()
     plt.errorbar(shot_numbers, pop_vals, yerr=pop_errs, label='Population',
@@ -182,22 +219,14 @@ def fidelity_population(n_qubits, n_shots, noise_model):
 
 if __name__ == "__main__":
     plt.rcParams.update({'figure.figsize': (9, 6), 'font.size': 18})
-    p1 = 1e-3
-    p2 = 1e-2
-    my_noise_model = depolarizing_noise_model(p1, p2)
+    p1 = 2e-2
+    p2 = 0
+    # my_noise_model = depolarizing_noise_model(p1, p2)
+    my_noise_model = only_h_noise_model(p1)
 
-    all_errors_experiment(n_qubits=10,
-                          noise_model=my_noise_model,
-                          shot_numbers=np.logspace(10, 15, num=6, base=2))
-    # shots_numbers = np.linspace(1000, 1e4, num=10)
-    # shots_dense = np.linspace(min(shots_numbers), max(shots_numbers), num=100)
-    # num_qubits = 12
-    # population_sigmas = population_error_experiment(num_qubits, shots_numbers,
-    #                                                 noise_model=my_noise_model)
-    # print(population_sigmas)
-    # popt, pcov = optimize.curve_fit(lambda x, a: a * x**(-0.5), shots_numbers, population_sigmas)
-    # plt.loglog(shots_numbers, population_sigmas, 'o')
-    # plt.loglog(shots_dense, popt[0] * shots_dense**(-0.5))
-    # print(popt)
-    # plt.grid()
-    # plt.show()
+    # all_errors_experiment(n_qubits=4,
+    #                       noise_model=my_noise_model,
+    #                       shot_numbers=np.logspace(11, 16, num=6, base=2))
+
+    my_qubit_numbers = np.arange(4, 16)
+    error_as_nq_experiment(my_qubit_numbers, noise_model=my_noise_model)

@@ -50,3 +50,12 @@ def depolarizing_noise_model(p_single, p_cx):
     noise_model.add_all_qubit_quantum_error(error, ['u1', 'u2', 'u3', 'h'])
     noise_model.add_all_qubit_quantum_error(error_cx, ['cx'])
     return noise_model
+
+
+def only_h_noise_model(p_h):
+    """Noise model in which all gates except the Hadamard are perfect."""
+    noise_model = NoiseModel()
+    # Add depolarizing error to all single qubit u1, u2, u3 gates
+    error = depolarizing_error(p_h, 1)
+    noise_model.add_all_qubit_quantum_error(error, ['h'])
+    return noise_model
