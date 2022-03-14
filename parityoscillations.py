@@ -12,8 +12,8 @@ def fidelity(n_qubits, total_shots, phi_values, noise_model=None):
     shots_parity = total_shots - shots_z
 
     coh, coh_error = coherence_with_bootstrap(n_qubits, shots_parity,
-                                              phi_values, noise_model)
-    alphas, alphas_variance = main.fidelity_population(n_qubits, shots_z, noise_model)
+                                              phi_values, noise_model=noise_model)
+    alphas, alphas_variance = shared.fidelity_population(n_qubits, shots_z, noise_model)
 
     fid = 0.5 * (alphas + coh)
     total_error = coh_error + (alphas_variance / shots_z)**0.5

@@ -32,6 +32,39 @@ def fidelity(n_qubits, total_shots, ratio=0.5, noise_model=None):
             fidelity_lower_error, fidelity_upper_error)
 
 
+def ghz_tailored_fidelity(n_qubits, total_shots, ratio=0.5, noise_model=None):
+    pop, pop_stderr = shared.fidelity_population(n_qubits, total_shots * ratio, noise_model)
+    backend = AerSimulator(noise_model=noise_model)
+    circ_ghz = shared.get_ghz_circuit(n_qubits)
+    circ_ghz_measure_x = shared.append_measurements_to_circ(circ_ghz, 'x')
+    result_x_noisy = backend.run(circ_ghz_measure_x, shots=total_shots * (1-ratio)).result()
+    counts_x_noisy = result_x_noisy.get_counts(circ_ghz_measure_x)
+    expected_x, error_x = expected_xxx_and_error(counts_x_noisy)
+
+    print('pop ', pop)
+    print('xxx ', expected_x)
+
+    lower_bound = pop + expected_x - 1
+    lower_error = pop_stderr + error_x
+    upper_bound = (pop + expected_x + 1) / 3
+    upper_error = (pop_stderr + error_x) / 3
+    return (lower_bound, upper_bound,
+            lower_error, upper_error)
+
+
+def expected_xxx_and_error(counts_x):
+    """Returns the expected value of XXXXX and std error based on the measurements in the X basis"""
+    shots_x = sum(counts_x.values())
+    parity_counts = np.zeros(2)
+    for k, v in counts_x.items():
+        parity = k.count('1')
+        parity_counts[parity % 2] += v
+    parity_probabilities = parity_counts / shots_x
+    energy = parity_probabilities[0] - parity_probabilities[1]
+    energy_error = ((1 - energy ** 2) / shots_x) ** 0.5
+    return energy, energy_error
+
+
 def energy_and_error_z(counts_z):
     shots_z = sum(counts_z.values())
     n = 0  #
@@ -82,6 +115,8 @@ def energy_z_with_confidence(counts_z, confidence_level=0.95):
 
 
 def energy_and_error_x(counts_x):
+    """Calculates the expected value and std error of parity times 2,
+    i.e. -X...X + 1."""
     shots_x = sum(counts_x.values())
     parity_counts = np.zeros(2)
     for k, v in counts_x.items():

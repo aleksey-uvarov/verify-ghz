@@ -1,5 +1,6 @@
 import numpy as np
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
+from qiskit.providers.aer import AerSimulator
 from qiskit.providers.aer.noise import NoiseModel, depolarizing_error
 
 
@@ -59,3 +60,15 @@ def only_h_noise_model(p_h):
     error = depolarizing_error(p_h, 1)
     noise_model.add_all_qubit_quantum_error(error, ['h'])
     return noise_model
+
+
+def fidelity_population(n_qubits, n_shots, noise_model):
+    backend = AerSimulator(noise_model=noise_model)
+    circ = append_measurements_to_circ(get_ghz_circuit(n_qubits), 'z')
+    result = backend.run(circ, shots=n_shots, seed=100).result()
+    counts = result.get_counts(circ)
+
+    # following the naming in Omran et al. (2019)
+    alphas = (counts['0' * n_qubits] + counts['1' * n_qubits]) / n_shots
+    alphas_variance = 1 - alphas**2
+    return alphas, (alphas_variance / n_shots)**0.5  # again maybe wilson?

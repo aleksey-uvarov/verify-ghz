@@ -9,7 +9,7 @@ def fidelity(n_qubits, noise_model, shots_population, shots_coherence):
     """Models the MQC fidelity estimation protocol
     from Phys Rev A 101, 032343.
     """
-    population, sigma_population = main.fidelity_population(n_qubits, shots_population, noise_model)
+    population, sigma_population = shared.fidelity_population(n_qubits, shots_population, noise_model)
     c, sigma_c = coherence(n_qubits, noise_model, shots_coherence)
     return 0.5 * (population + c), 0.5 * (sigma_population + sigma_c)
 
