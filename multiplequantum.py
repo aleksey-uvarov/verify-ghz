@@ -10,7 +10,7 @@ def fidelity(n_qubits, noise_model, shots_population, shots_coherence):
     from Phys Rev A 101, 032343.
     """
     population, sigma_population = shared.fidelity_population(n_qubits, shots_population, noise_model)
-    c, sigma_c = coherence(n_qubits, noise_model, shots_coherence)
+    c, sigma_c = coherence_with_bootstrap(n_qubits, noise_model, shots_coherence)
     return 0.5 * (population + c), 0.5 * (sigma_population + sigma_c)
 
 
@@ -34,7 +34,7 @@ def coherence_with_bootstrap(n_qubits, noise_model, shots, n_bootstraps=100):
         i_q = np.fft.ifft(bootstrap_signal)
         bootstrap_estimates[i] = 2 * i_q[n_qubits].real**0.5
     bootstrap_variance = np.var(bootstrap_estimates)
-    return c, (bootstrap_variance)**0.5
+    return c, bootstrap_variance**0.5
 
 
 def coherence_signal(n_qubits, noise_model, shots_coherence):
@@ -49,9 +49,10 @@ def coherence_signal(n_qubits, noise_model, shots_coherence):
         circ.measure(circ.qregs[0][0], circ.cregs[0][0])
         result = backend.run(circ, shots=shots_per_experiment).result()
         counts = result.get_counts()
-        for k, v in counts.items():
-            if k[-1] == "0":
-                signal[i] += v / shots_per_experiment
+        # for k, v in counts.items():
+        #     if k[-1] == "0":
+        #         signal[i] += v / shots_per_experiment
+        signal[i] = counts["0" * n_qubits] / shots_per_experiment
     sigmas = ((1 - signal**2) / shots_per_experiment)**0.5
     return signal, sigmas
 

@@ -176,10 +176,10 @@ def compare_fidelity_estimates(n_qubits=4, noise_model=None):
     shots_coherence = 1e5
     shots_pop = 1e5
 
-    # mqc_fid, mqc_err = multiplequantum.fidelity(n_qubits, noise_model, shots_pop, shots_coherence)
+    mqc_fid, mqc_err = multiplequantum.fidelity(n_qubits, noise_model, shots_pop, shots_coherence)
     f_true = true_fidelity(get_ghz_circuit(n_qubits), noise_model)
-    # po_fid, po_err = parityoscillations.fidelity(n_qubits, shots_coherence + shots_pop,
-    #                                              np.linspace(0, 2 * np.pi, num=2 * n_qubits + 2), noise_model)
+    po_fid, po_err = parityoscillations.fidelity(n_qubits, shots_coherence + shots_pop,
+                                                 np.linspace(0, 2 * np.pi, num=2 * n_qubits + 2), noise_model)
     telescope_data = telescope.fidelity(n_qubits,
                                         shots_coherence + shots_pop,
                                         noise_model=noise_model)
@@ -188,8 +188,8 @@ def compare_fidelity_estimates(n_qubits=4, noise_model=None):
                                                             noise_model=noise_model)
 
     print("True ", f_true)
-    # print("MQC ", mqc_fid, mqc_err)
-    # print("PO ", po_fid, po_err)
+    print("MQC ", mqc_fid, mqc_err)
+    print("PO ", po_fid, po_err)
     print("Telescope lower ", telescope_data[0], telescope_data[2])
     print("Telescope upper ", telescope_data[1], telescope_data[3])
     print("Telescope lower (tailored) ", telescope_better_data[0], telescope_better_data[2])
@@ -214,10 +214,10 @@ def true_fidelity(circ, noise_model):
 
 if __name__ == "__main__":
     plt.rcParams.update({'figure.figsize': (9, 6), 'font.size': 18})
-    p1 = 1e-2
-    p2 = 5e-2
+    p1 = 1e-3
+    p2 = 1e-2
     my_noise_model = shared.depolarizing_noise_model(p1, p2)
-    compare_fidelity_estimates(n_qubits=8, noise_model=my_noise_model)
+    # compare_fidelity_estimates(n_qubits=8, noise_model=my_noise_model)
 
     # my_noise_model = only_h_noise_model(p1)
 
@@ -225,5 +225,5 @@ if __name__ == "__main__":
     #                       noise_model=my_noise_model,
     #                       shot_numbers=np.logspace(11, 16, num=6, base=2))
 
-    # my_qubit_numbers = np.arange(4, 16)
-    # error_as_nq_experiment(my_qubit_numbers, noise_model=my_noise_model)
+    my_qubit_numbers = np.arange(4, 13)
+    error_as_nq_experiment(my_qubit_numbers, noise_model=my_noise_model)
