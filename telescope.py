@@ -1,4 +1,5 @@
 from qiskit.providers.aer import AerSimulator
+from qiskit import QuantumCircuit
 import numpy as np
 import main
 from scipy.special import erfinv
